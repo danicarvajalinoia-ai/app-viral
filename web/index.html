@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radar de Referentes</title>
+  <!-- El tema se aplica ANTES de pintar: si se hiciera en app.js, la página
+       parpadearía en oscuro un instante antes de pasar a claro. -->
+  <script>(function(){try{if(localStorage.getItem('am_tema')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}})();</script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css?v=5">
+  <link rel="stylesheet" href="css/components.css?v=5">
+  <link rel="stylesheet" href="css/referentes.css?v=5">
+  <!-- Lee los .docx que se suben como ejemplos de voz de marca. -->
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+</head>
+<body>
+
+  <!-- ── Primera vez: conectar la hoja ── -->
+  <div id="pantalla-conexion" class="acceso-screen hidden">
+    <div class="acceso-card" style="max-width:520px">
+      <h1>Conecta tu hoja</h1>
+      <p>Pega la URL que te dio Google al publicar el Apps Script de tu Google Sheet. Termina en <code>/exec</code>.</p>
+      <form id="form-conexion">
+        <div class="acceso-field">
+          <label>URL del Apps Script</label>
+          <input type="url" id="conexion-url" placeholder="https://script.google.com/macros/s/AKfy…/exec" autocomplete="off">
+        </div>
+        <div id="conexion-error" class="acceso-error"></div>
+        <button type="submit" class="btn-primary" style="width:100%;justify-content:center;padding:11px">Conectar</button>
+      </form>
+      <p style="margin-top:18px;font-size:13px;color:var(--text-secondary)">
+        ¿Todavía no la tienes?
+        <a href="#" onclick="verDemo();return false" style="color:var(--accent-light)">Mira primero la demo</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Primera vez: definir la clave de acceso ── -->
+  <div id="pantalla-clave" class="acceso-screen hidden">
+    <div class="acceso-card">
+      <h1>Configura tu app</h1>
+      <p>Define la clave con la que entrarás a tu Radar de Referentes. La necesitarás en cada navegador desde el que uses la app.</p>
+      <form id="form-clave">
+        <div class="acceso-field">
+          <label>Clave nueva</label>
+          <input type="password" id="clave-1" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+        </div>
+        <div class="acceso-field">
+          <label>Repítela</label>
+          <input type="password" id="clave-2" placeholder="Otra vez" autocomplete="new-password">
+        </div>
+        <div id="clave-error" class="acceso-error"></div>
+        <button type="submit" class="btn-primary" style="width:100%;justify-content:center;padding:11px">Guardar y entrar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Entrar ── -->
+  <div id="pantalla-login" class="acceso-screen hidden">
+    <div class="acceso-card">
+      <h1>Radar de Referentes</h1>
+      <p>Escribe tu clave de acceso para continuar.</p>
+      <form id="form-login">
+        <div class="acceso-field">
+          <label>Clave</label>
+          <input type="password" id="login-clave" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <div id="login-error" class="acceso-error"></div>
+        <button type="submit" class="btn-primary" style="width:100%;justify-content:center;padding:11px">Entrar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── App ── -->
+  <div id="app-shell" class="hidden">
+
+    <header class="am-topbar">
+      <div class="am-logo">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>
+        Radar de Referentes
+      </div>
+      <nav class="am-nav">
+        <button class="nav-item active" data-page="referentes" onclick="irA('referentes')">Radar</button>
+        <button class="nav-item" data-page="ajustes" onclick="irA('ajustes')">Ajustes</button>
+      </nav>
+      <button class="am-iconbtn" id="btn-tema" onclick="alternarTema(); this.blur()" aria-label="Cambiar tema"></button>
+      <button class="ia-btn-ghost" onclick="salir()">Salir</button>
+    </header>
+
+    <div id="banner-demo" class="am-banner hidden">
+      <b>Modo demo</b> — estás viendo datos de ejemplo. No se scrapea nada, la IA no está conectada y los cambios se pierden al recargar.
+      <button class="am-banner-btn" onclick="desconectar()">Conectar mi hoja</button>
+    </div>
+
+    <main class="am-main">
+      <div id="page-referentes" class="page"></div>
+      <div id="page-ajustes" class="page hidden"></div>
+    </main>
+
+    <div id="modal-backdrop" class="modal-backdrop hidden"></div>
+    <div id="modal-detalle" class="modal hidden" style="max-width:1000px"></div>
+    <div id="modal-ejemplo" class="modal hidden"></div>
+    <div id="modal-cuenta" class="modal hidden"></div>
+    <div id="modal-confirm" class="modal hidden"></div>
+
+  </div>
+
+  <div id="toast-container"></div>
+
+  <!-- Orden de dependencia -->
+  <script src="js/config.js?v=5"></script>
+  <script src="js/demo.js?v=5"></script>
+  <script src="js/utils.js?v=5"></script>
+  <script src="js/store.js?v=5"></script>
+  <script src="js/api.js?v=5"></script>
+  <script src="js/pages/referentes.js?v=5"></script>
+  <script src="js/pages/ajustes.js?v=5"></script>
+  <script src="js/app.js?v=5"></script>
+</body>
+</html>

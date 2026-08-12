@@ -1,0 +1,278 @@
+/* ============================================================
+   RADAR DE REFERENTES — estilos propios de esta app.
+   Se apoya en las variables de color de app.css.
+   ============================================================ */
+
+/* ── Caja de análisis ── */
+.rf-hero {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 26px 28px;
+  margin-bottom: 18px;
+}
+.rf-hero-title {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 22px; font-weight: 700; color: var(--text-primary);
+}
+.rf-hero-sub {
+  color: var(--text-secondary); font-size: 14px;
+  margin: 6px 0 18px; max-width: 640px; line-height: 1.5;
+}
+.rf-hero-row { display: flex; gap: 10px; align-items: stretch; }
+.rf-url-input {
+  flex: 1; min-width: 0;
+  padding: 12px 16px; font-size: 14px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg-secondary); color: var(--text-primary);
+}
+.rf-url-input:focus { outline: none; border-color: var(--accent); }
+.rf-analizar-btn { white-space: nowrap; padding: 12px 20px; }
+.rf-progreso {
+  margin-top: 14px; padding: 10px 14px;
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent); border-radius: 8px;
+  font-size: 13px; color: var(--text-secondary);
+}
+
+/* ── Mis cuentas: seguidores por red ── */
+.rf-mis-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 14px; margin-bottom: 12px;
+}
+.rf-seccion-title { font-size: 17px; font-weight: 700; color: var(--text-primary); }
+
+.rf-metrics {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px; margin-bottom: 18px;
+}
+.rf-metric-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 20px;
+}
+.rf-metric-head {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 10px;
+}
+.rf-metric-num { font-size: 28px; font-weight: 700; color: var(--text-primary); line-height: 1.1; }
+.rf-metric-sub {
+  font-size: 11px; font-weight: 600; letter-spacing: .5px;
+  color: var(--text-muted); margin-top: 6px;
+}
+.rf-metric-delta { font-size: 12px; font-weight: 600; margin-top: 8px; }
+.rf-metric-foot { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+
+.rf-aviso {
+  margin: -8px 0 18px; font-size: 13px; color: var(--text-secondary);
+}
+.rf-aviso a { color: var(--accent-light); text-decoration: none; }
+
+.ia-block-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 14px; margin-bottom: 12px;
+}
+
+/* ── Lista ── */
+.rf-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px 22px;
+}
+.rf-list-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.rf-list-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.rf-list-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.rf-filtros { display: flex; gap: 8px; flex-wrap: wrap; }
+.rf-filtros select, .rf-search {
+  padding: 8px 12px; font-size: 13px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-secondary); color: var(--text-primary);
+}
+.rf-search { min-width: 200px; }
+
+.rf-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 13px 4px; border-top: 1px solid var(--border);
+  cursor: pointer; transition: background .12s;
+}
+.rf-row:hover { background: var(--bg-hover); }
+.rf-row-main { flex: 1; min-width: 0; }
+.rf-row-title {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rf-row-meta {
+  display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+  font-size: 12px; color: var(--text-secondary); margin-top: 3px;
+}
+.rf-warn { color: #f59e0b; }
+
+.rf-row-stats {
+  display: flex; gap: 14px; font-size: 12.5px;
+  color: var(--text-secondary); white-space: nowrap;
+}
+.rf-row-stats span { display: inline-flex; align-items: center; gap: 4px; }
+
+.rf-row-actions { display: flex; align-items: center; gap: 8px; }
+.rf-estado-sel {
+  padding: 5px 9px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--border); border-radius: 7px;
+  background: transparent; cursor: pointer;
+}
+.rf-empty { padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px; }
+
+.rf-brand { flex-shrink: 0; vertical-align: -3px; }
+.rf-dot {
+  display: inline-block; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--text-muted);
+}
+
+/* ── Detalle ── */
+.rf-stats-strip {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px; margin: 16px 0 12px;
+  padding: 14px; background: var(--bg-secondary);
+  border: 1px solid var(--border); border-radius: 10px;
+}
+.rf-stats-strip div { text-align: center; }
+.rf-stats-strip b { display: block; font-size: 17px; font-weight: 700; color: var(--text-primary); }
+.rf-stats-strip span { font-size: 11px; color: var(--text-muted); }
+.rf-hashtags { font-size: 12.5px; color: var(--accent-light, var(--accent)); margin-bottom: 6px; word-break: break-word; }
+.rf-hint { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 4px; }
+.rf-hint a { color: var(--accent-light, var(--accent)); text-decoration: none; }
+
+.rf-detalle-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 18px; }
+.rf-col { min-width: 0; }
+.rf-col-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+  color: var(--text-secondary); padding-bottom: 8px;
+  border-bottom: 1px solid var(--border); margin-bottom: 12px;
+}
+.rf-campo { margin-bottom: 14px; }
+.rf-campo-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.rf-campo-head label {
+  font-size: 11px; font-weight: 600; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--text-secondary);
+}
+.rf-campo textarea {
+  width: 100%; box-sizing: border-box;
+  padding: 10px 12px; font-family: inherit; font-size: 13.5px; line-height: 1.6;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-secondary); color: var(--text-primary); resize: vertical;
+}
+.rf-campo textarea:focus { outline: none; border-color: var(--accent); }
+.rf-copy {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: none; cursor: pointer;
+  font-size: 11px; color: var(--text-muted); padding: 2px 4px;
+}
+.rf-copy:hover { color: var(--accent-light, var(--accent)); }
+
+@media (max-width: 860px) {
+  .rf-detalle-cols { grid-template-columns: 1fr; }
+  .rf-hero-row { flex-direction: column; }
+  .rf-row { flex-wrap: wrap; }
+}
+
+/* ── Pantallas de acceso ── */
+.acceso-screen {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--bg-primary); padding: 20px; z-index: 100;
+}
+.acceso-card {
+  width: 100%; max-width: 400px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 34px 32px;
+}
+.acceso-card h1 { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+.acceso-card p { font-size: 13.5px; color: var(--text-secondary); margin: 6px 0 22px; line-height: 1.5; }
+.acceso-field { margin-bottom: 14px; }
+.acceso-field label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: var(--text-secondary); margin-bottom: 6px;
+}
+.acceso-field input {
+  width: 100%; box-sizing: border-box; padding: 11px 14px; font-size: 14px;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: var(--bg-secondary); color: var(--text-primary);
+}
+.acceso-field input:focus { outline: none; border-color: var(--accent); }
+.acceso-error { color: var(--red); font-size: 13px; min-height: 18px; margin-bottom: 8px; }
+
+/* ── Barra superior ── */
+/* app.css arma la app del CRM en 100vh con overflow:hidden, porque allá el
+   scroll lo hace un contenedor interno junto al sidebar. Aquí no hay sidebar:
+   scrollea la página entera, así que hay que soltar esa altura fija en los
+   tres niveles (html, body y el shell) o la página queda congelada. */
+html, body {
+  height: auto;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+#app-shell {
+  display: block;
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+}
+
+.am-topbar {
+  display: flex; align-items: center; gap: 20px;
+  padding: 0 26px; height: 58px;
+  background: var(--bg-card); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 20;
+}
+.am-logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; color: var(--text-primary); }
+.am-nav { display: flex; gap: 4px; flex: 1; }
+.am-nav .nav-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 13px; border-radius: 8px; cursor: pointer;
+  font-size: 13.5px; font-weight: 500; color: var(--text-secondary);
+  background: none; border: none; font-family: inherit;
+}
+.am-nav .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.am-nav .nav-item.active { background: var(--bg-hover); color: var(--text-primary); font-weight: 600; }
+.am-main { padding: 24px 26px 60px; max-width: 1240px; margin: 0 auto; }
+
+.am-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; flex-shrink: 0;
+  background: none; border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text-secondary); cursor: pointer;
+}
+.am-iconbtn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* ── Aviso de modo demo ── */
+.am-banner {
+  background: #fef3c7; color: #78350f;
+  border-bottom: 1px solid #fcd34d;
+  padding: 10px 26px; font-size: 13px; line-height: 1.5;
+}
+.am-banner code {
+  background: rgba(0, 0, 0, .07); padding: 1px 5px;
+  border-radius: 4px; font-size: 12px;
+}
+.am-banner-btn {
+  margin-left: 8px; padding: 4px 11px;
+  background: #78350f; color: #fff;
+  border: none; border-radius: 6px;
+  font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer;
+}
+.am-banner-btn:hover { background: #92400e; }
+
+/* Encabezado de modal con su botón de cerrar (vienen del CRM). */
+.modal-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.modal-x {
+  background: none; border: none; color: var(--text-muted);
+  font-size: 24px; line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.modal-x:hover { color: var(--text-primary); }
+
+/* Código dentro de las pantallas de acceso (la URL /exec, etc.) */
+.acceso-card code {
+  background: var(--bg-hover); padding: 1px 5px;
+  border-radius: 4px; font-size: 12px;
+}

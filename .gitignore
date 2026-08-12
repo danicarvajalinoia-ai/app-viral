@@ -1,0 +1,7 @@
+# Nada de dependencias ni basura del sistema
+node_modules/
+.DS_Store
+Thumbs.db
+
+# La URL del Apps Script de un cliente NO va al repo: cada copia conecta la
+# suya desde la app. config.js se versiona con BACKEND_URL vacío.

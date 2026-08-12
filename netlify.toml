@@ -1,0 +1,12 @@
+# Solo se publica web/. apps-script/ e INSTALACION.md se quedan fuera a
+# propósito: son el producto que vendes, no algo que deba poder descargarse
+# desde el sitio.
+[build]
+  publish = "web"
+  command = ""
+
+# La app es una sola página: cualquier ruta cae en index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
