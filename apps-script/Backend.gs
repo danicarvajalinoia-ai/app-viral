@@ -77,7 +77,7 @@ var ACTORES_DEFAULT = {
 
 // Cambia con cada entrega del archivo. Sirve para confirmar qué código está
 // publicado: abre la URL /exec en el navegador y aparece aquí.
-var VERSION_BACKEND = '2026-11-02.4'
+var VERSION_BACKEND = '2026-11-02.5'
 
 function doGet(e) {
   return json_({ ok: true, status: 'App Marketing · Radar de Referentes', version: VERSION_BACKEND })
@@ -300,6 +300,7 @@ function h_analizar(d) {
   if (!plataforma) {
     return { ok: false, error: 'No reconozco ese enlace. Debe ser de Instagram, TikTok o YouTube.' }
   }
+  url = limpiarEnlace_(url, plataforma)
 
   var scrape = scrapeApify_(url, plataforma)
   if (!scrape.ok) return scrape
@@ -629,6 +630,24 @@ function seguidoresDe_(c, token) {
 // ============================================================
 // APIFY
 // ============================================================
+
+/**
+ * Deja el enlace en la forma que entienden los actores de Apify.
+ * Instagram comparte los reels de varias maneras (/reels/CODIGO/,
+ * /reel/CODIGO/?igsh=..., /tv/CODIGO/) y el actor espera /reel/CODIGO/ o
+ * /p/CODIGO/. En TikTok sobran los parámetros de seguimiento.
+ */
+function limpiarEnlace_(url, plataforma) {
+  if (plataforma === 'instagram') {
+    var m = url.match(/instagram\.com\/(?:[\w.]+\/)?(p|reels?|tv)\/([\w-]+)/i)
+    if (m) return 'https://www.instagram.com/' + (m[1].toLowerCase() === 'p' ? 'p' : 'reel') + '/' + m[2] + '/'
+    return url
+  }
+  if (plataforma === 'tiktok' && /tiktok\.com\/@[^/]+\/(video|photo)\//i.test(url)) {
+    return url.split('?')[0]
+  }
+  return url
+}
 
 function detectarPlataforma_(url) {
   var u = url.toLowerCase()
