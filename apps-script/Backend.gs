@@ -75,8 +75,12 @@ var ACTORES_DEFAULT = {
 // ENTRADA HTTP
 // ============================================================
 
+// Cambia con cada entrega del archivo. Sirve para confirmar qué código está
+// publicado: abre la URL /exec en el navegador y aparece aquí.
+var VERSION_BACKEND = '2026-11-02.4'
+
 function doGet(e) {
-  return json_({ ok: true, status: 'App Marketing · Radar de Referentes' })
+  return json_({ ok: true, status: 'App Marketing · Radar de Referentes', version: VERSION_BACKEND })
 }
 
 function doPost(e) {
@@ -128,7 +132,7 @@ function json_(obj) {
 // protege con una clave que el dueño define la primera vez que entra.
 
 function h_estado() {
-  return { ok: true, configurado: !!PROPS.getProperty('CLAVE_ACCESO') }
+  return { ok: true, configurado: !!PROPS.getProperty('CLAVE_ACCESO'), version: VERSION_BACKEND }
 }
 
 function h_setClave(d) {
@@ -351,6 +355,7 @@ function h_regenerar(d) {
   })
   if (!ia.ok) {
     console.log('IA falló al regenerar: ' + ia.error)
+    escribirCampos_(h, map, fila, { tema: '⚠ La IA falló: ' + ia.error })
     return ia
   }
 
@@ -1090,8 +1095,10 @@ function cuerpoClaude_(key, modelo, sistema, entrada, simple) {
 
 /** Hace la llamada. Marca "reintentar" en los errores que vale la pena repetir. */
 function pedirAClaude_(peticion) {
+  var inicio = Date.now()
   var res
   try {
+    console.log('Claude: pidiendo a ' + peticion.cuerpo.model + (peticion.cuerpo.thinking ? ' (rápido)' : ''))
     res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
       method: 'post',
       contentType: 'application/json',
@@ -1101,10 +1108,12 @@ function pedirAClaude_(peticion) {
     })
   } catch (err) {
     // Casi siempre es tiempo agotado ("Timeout").
+    console.log('Claude: sin respuesta tras ' + segundos_(inicio) + ' s')
     return { ok: false, reintentar: true, error: 'No se pudo conectar con Claude: ' + (err.message || err) }
   }
 
   var code = res.getResponseCode()
+  console.log('Claude: respondió ' + code + ' en ' + segundos_(inicio) + ' s')
   if (code >= 400) {
     return { ok: false, reintentar: code === 400 || code === 408 || code === 429 || code >= 500,
              error: 'Claude respondió ' + code + ': ' + res.getContentText().slice(0, 300) }
@@ -1213,4 +1222,54 @@ function h_saveConfig(d) {
   if (d.quitar === 'openai') PROPS.deleteProperty('OPENAI_KEY')
 
   return h_getConfig()
+}
+
+function segundos_(inicio) { return ((Date.now() - inicio) / 1000).toFixed(1) }
+
+// ============================================================
+// DIAGNÓSTICO (se corre a mano desde el editor de Apps Script)
+// ============================================================
+//
+// En el editor: elige "diagnostico" en el menú de funciones de arriba y
+// pulsa Ejecutar. Abajo, en "Registro de ejecución", aparece paso a paso
+// qué está configurado y qué responde la IA. Si la IA responde bien, llena
+// la fila más reciente que haya quedado sin textos.
+
+function diagnostico() {
+  console.log('Versión del backend: ' + VERSION_BACKEND)
+  var cfg = leerConfigIA_()
+  console.log('Proveedor: ' + cfg.proveedor + ' · Modelo: ' + (cfg.modelo || '(vacío, usa ' + MODELO_CLAUDE_DEFAULT + ')'))
+  console.log('Llaves puestas · Apify: ' + !!PROPS.getProperty('APIFY_TOKEN') +
+    ' · Claude: ' + !!PROPS.getProperty('ANTHROPIC_KEY') + ' · OpenAI: ' + !!PROPS.getProperty('OPENAI_KEY'))
+
+  var filas = h_listar().filas
+  var objetivo = null
+  for (var i = filas.length - 1; i >= 0; i--) {
+    if (!filas[i].guion && (filas[i].transcripcion || filas[i].captionOriginal)) { objetivo = filas[i]; break }
+  }
+  if (!objetivo) {
+    console.log('No hay filas sin textos de IA. Probando con un texto corto de ejemplo.')
+    objetivo = { referente: 'prueba', plataforma: 'Instagram', hashtag: '#prueba',
+                 transcripcion: 'Tres errores que cometes al publicar en Instagram y cómo evitarlos.' }
+  } else {
+    console.log('Fila a regenerar: ' + objetivo.referente + ' (' + objetivo.id + ')')
+  }
+
+  var inicio = Date.now()
+  var ia = generarConIA_({
+    referente: objetivo.referente, plataforma: objetivo.plataforma,
+    caption: objetivo.captionOriginal || objetivo.caption, hashtag: objetivo.hashtag,
+    transcripcion: objetivo.transcripcion
+  })
+  console.log('IA terminó en ' + segundos_(inicio) + ' s')
+
+  if (!ia.ok) {
+    console.log('❌ ERROR DE LA IA: ' + ia.error)
+    return
+  }
+  console.log('✅ La IA respondió. Tema: ' + ia.datos.tema)
+  if (objetivo.id) {
+    var res = h_guardar({ id: objetivo.id, campos: ia.datos })
+    console.log(res.ok ? '✅ Fila actualizada en la hoja.' : 'No se pudo guardar: ' + res.error)
+  }
 }
