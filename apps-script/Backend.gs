@@ -303,7 +303,10 @@ function h_analizar(d) {
   // Sin subtítulos (Instagram casi siempre): se transcribe el audio del video.
   var avisoTranscripcion = ''
   if (!scrape.datos.transcripcion) {
-    var tr = transcribirAudio_(scrape.datos.videoUrl)
+    // Los hashtags y el caption le enseñan a OpenAI cómo se escriben los
+    // nombres propios del video (sin pista, "Claude" sale como "Cloud").
+    var pista = (scrape.datos.hashtag + ' ' + scrape.datos.caption).replace(/\s+/g, ' ').trim().slice(0, 500)
+    var tr = transcribirAudio_(scrape.datos.videoUrl, pista)
     if (tr.ok) scrape.datos.transcripcion = tr.texto
     else {
       avisoTranscripcion = 'Sin transcripción: ' + tr.error
@@ -315,7 +318,11 @@ function h_analizar(d) {
   if (!ia.ok) {
     // El scraping sí sirvió: guardo la fila igual para no perder el trabajo
     // (y el usuario puede reintentar solo la parte de IA con "Regenerar").
-    var guardadaSinIA = escribirFila_(scrape.datos, {}, null)
+    // El error queda escrito en Tema: así se ve en la lista y al abrir la
+    // fila, no solo en un aviso que desaparece. "Regenerar" lo sobrescribe.
+    console.log('IA falló: ' + ia.error + ' · ' + url)
+    var guardadaSinIA = escribirFila_(scrape.datos,
+      { tema: '⚠ La IA falló: ' + ia.error + ' Usa "Regenerar con IA".' }, null)
     return { ok: false, error: 'Se guardaron los datos del referente, pero la IA falló: ' + ia.error,
              parcial: true, fila: guardadaSinIA, avisoTranscripcion: avisoTranscripcion }
   }
@@ -342,7 +349,10 @@ function h_regenerar(d) {
     hashtag: actual.hashtag,
     transcripcion: actual.transcripcion
   })
-  if (!ia.ok) return ia
+  if (!ia.ok) {
+    console.log('IA falló al regenerar: ' + ia.error)
+    return ia
+  }
 
   escribirCampos_(h, map, fila, {
     tema: ia.datos.tema, traduccion: ia.datos.traduccion, guion: ia.datos.guion,
@@ -841,7 +851,7 @@ function puntajeIdioma_(s) {
 var MODELO_TRANSCRIPCION_DEFAULT = 'whisper-1'
 var LIMITE_AUDIO_MB = 25   // tope de OpenAI por archivo
 
-function transcribirAudio_(videoUrl) {
+function transcribirAudio_(videoUrl, pista) {
   var key = PROPS.getProperty('OPENAI_KEY')
   if (!key) return { ok: false, error: 'el post no trae subtítulos. Pon la llave de OpenAI en Ajustes para transcribir el audio.' }
   if (!videoUrl) return { ok: false, error: 'Apify no devolvió el archivo del video.' }
@@ -864,15 +874,18 @@ function transcribirAudio_(videoUrl) {
   // OpenAI reconoce el formato por la extensión del nombre.
   blob.setName('video.mp4')
 
+  var formulario = {
+    file: blob,
+    model: PROPS.getProperty('TRANSCRIPCION_MODELO') || MODELO_TRANSCRIPCION_DEFAULT
+  }
+  if (pista) formulario.prompt = pista
+
   var res
   try {
     res = UrlFetchApp.fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'post',
       headers: { Authorization: 'Bearer ' + key },
-      payload: {
-        file: blob,
-        model: PROPS.getProperty('TRANSCRIPCION_MODELO') || MODELO_TRANSCRIPCION_DEFAULT
-      },
+      payload: formulario,
       muteHttpExceptions: true
     })
   } catch (err) {
@@ -1019,42 +1032,17 @@ function llamarClaude_(sistema, entrada, cfg) {
   if (!key) return { ok: false, error: 'Falta la API key de Claude. Ponla en Ajustes → IA.' }
 
   var modelo = cfg.modelo || MODELO_CLAUDE_DEFAULT
-  var headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
-  var cuerpo = {
-    model: modelo,
-    // Los modelos 5.x piensan antes de responder y ese razonamiento cuenta
-    // dentro de max_tokens: con 4000 el JSON podía quedar cortado.
-    max_tokens: 16000,
-    system: sistema,
-    messages: [{ role: 'user', content: entrada }]
-  }
-  // "medium" equilibra calidad y tiempo: Apps Script corta a los 6 minutos y
-  // en ese tiempo también caben Apify y la transcripción.
-  if (/^claude-(opus|sonnet|haiku|fable)-5/.test(modelo)) {
-    cuerpo.output_config = { effort: 'medium' }
-  }
-  if (MODELOS_CON_FALLBACK.indexOf(modelo) >= 0) {
-    headers['anthropic-beta'] = 'server-side-fallback-2026-07-01'
-    cuerpo.fallbacks = 'default'
-  }
 
-  var res
-  try {
-    res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
-      method: 'post',
-      contentType: 'application/json',
-      headers: headers,
-      payload: JSON.stringify(cuerpo),
-      muteHttpExceptions: true
-    })
-  } catch (err) {
-    return { ok: false, error: 'No se pudo conectar con Claude: ' + (err.message || err) }
+  // Primer intento con todo; si falla por tiempo, por saturación o por un
+  // parámetro que la cuenta no acepte (400), se reintenta una vez con la
+  // petición más simple y rápida posible.
+  var r = pedirAClaude_(cuerpoClaude_(key, modelo, sistema, entrada, false))
+  if (!r.ok && r.reintentar) {
+    console.log('Claude, primer intento: ' + r.error + ' · reintentando simple')
+    r = pedirAClaude_(cuerpoClaude_(key, modelo, sistema, entrada, true))
   }
-
-  if (res.getResponseCode() >= 400) {
-    return { ok: false, error: 'Claude respondió ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300) }
-  }
-  var body = JSON.parse(res.getContentText())
+  if (!r.ok) return r
+  var body = r.body
 
   if (body.stop_reason === 'refusal') {
     var cat = body.stop_details && body.stop_details.category
@@ -1068,6 +1056,64 @@ function llamarClaude_(sistema, entrada, cfg) {
     .map(function(b) { return b.text || '' }).join('')
   if (!texto) return { ok: false, error: 'Claude devolvió una respuesta vacía.' }
   return { ok: true, contenido: texto }
+}
+
+/**
+ * Arma la petición. La "simple" no usa funciones beta y, en Sonnet 5.5,
+ * apaga el razonamiento previo: responde bastante más rápido, que es lo que
+ * importa cuando el primer intento se quedó sin tiempo.
+ */
+function cuerpoClaude_(key, modelo, sistema, entrada, simple) {
+  var headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
+  var cuerpo = {
+    model: modelo,
+    // Los modelos 5.x pueden razonar antes de responder y eso cuenta dentro
+    // de max_tokens: con 4000 el JSON podía quedar cortado.
+    max_tokens: 16000,
+    system: sistema,
+    messages: [{ role: 'user', content: entrada }]
+  }
+  // "low": para redactar a partir de un guion basta, y responde rápido.
+  // Apps Script corta a los 6 minutos y ahí también caben Apify y la
+  // transcripción.
+  if (/^claude-(opus|sonnet|haiku|fable)-5/.test(modelo)) {
+    cuerpo.output_config = { effort: 'low' }
+  }
+  if (simple) {
+    if (modelo === 'claude-sonnet-5-5') cuerpo.thinking = { type: 'between_tools' }
+  } else if (MODELOS_CON_FALLBACK.indexOf(modelo) >= 0) {
+    headers['anthropic-beta'] = 'server-side-fallback-2026-07-01'
+    cuerpo.fallbacks = 'default'
+  }
+  return { headers: headers, cuerpo: cuerpo }
+}
+
+/** Hace la llamada. Marca "reintentar" en los errores que vale la pena repetir. */
+function pedirAClaude_(peticion) {
+  var res
+  try {
+    res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: peticion.headers,
+      payload: JSON.stringify(peticion.cuerpo),
+      muteHttpExceptions: true
+    })
+  } catch (err) {
+    // Casi siempre es tiempo agotado ("Timeout").
+    return { ok: false, reintentar: true, error: 'No se pudo conectar con Claude: ' + (err.message || err) }
+  }
+
+  var code = res.getResponseCode()
+  if (code >= 400) {
+    return { ok: false, reintentar: code === 400 || code === 408 || code === 429 || code >= 500,
+             error: 'Claude respondió ' + code + ': ' + res.getContentText().slice(0, 300) }
+  }
+  try {
+    return { ok: true, body: JSON.parse(res.getContentText()) }
+  } catch (err) {
+    return { ok: false, reintentar: true, error: 'Claude devolvió una respuesta ilegible.' }
+  }
 }
 
 function llamarOpenAI_(sistema, entrada, cfg) {
