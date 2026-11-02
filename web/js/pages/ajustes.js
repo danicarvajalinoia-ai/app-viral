@@ -166,7 +166,7 @@ function ajBloqueLlaves(c) {
   return '<div class="ia-block"><h3 class="ia-h3">Llaves</h3>' +
     ajTarjetaLlave('apify',  'Apify',  'Scrapea los posts de los referentes.', c.apifyPuesta,  'https://console.apify.com/account/integrations') +
     ajTarjetaLlave('claude', 'Claude', 'Genera guion, caption, carrusel y video 10s.', c.claudePuesta, 'https://console.anthropic.com/settings/keys') +
-    ajTarjetaLlave('openai', 'OpenAI', 'Alternativa a Claude.', c.openaiPuesta, 'https://platform.openai.com/api-keys') +
+    ajTarjetaLlave('openai', 'OpenAI', 'Transcribe el audio cuando el post no trae subtítulos (Instagram). También sirve de alternativa a Claude.', c.openaiPuesta, 'https://platform.openai.com/api-keys') +
   '</div>'
 }
 
@@ -226,7 +226,7 @@ function ajBloqueProveedor(c) {
     '<div class="form-grid">' +
       '<div class="form-row"><label>Proveedor</label><select id="aj-proveedor">' + ops + '</select></div>' +
       '<div class="form-row"><label>Modelo</label>' +
-        '<input id="aj-modelo" value="' + escHtml(c.modelo || '') + '" placeholder="claude-sonnet-4-5"></div>' +
+        '<input id="aj-modelo" value="' + escHtml(c.modelo || '') + '" placeholder="claude-sonnet-5-5"></div>' +
     '</div>' +
     '<p class="ia-suave">Si dejas el modelo vacío se usa el recomendado del proveedor.</p>' +
     '<div style="margin-top:10px"><button class="btn-primary" onclick="ajGuardarProveedor()">Guardar</button></div>' +

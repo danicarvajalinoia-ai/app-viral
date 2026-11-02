@@ -10,8 +10,10 @@
  * QUÉ HACE
  *   1. Recibe el enlace de un post de un competidor.
  *   2. Lo scrapea con Apify (Instagram / TikTok / YouTube).
- *   3. Le pide a la IA que genere Guion, Caption, Carrusel y Video 10s.
- *   4. Guarda todo como una fila en la hoja.
+ *   3. Si el post no trae subtítulos y hay llave de OpenAI, descarga el
+ *      video y transcribe el audio.
+ *   4. Le pide a la IA que genere Guion, Caption, Carrusel y Video 10s.
+ *   5. Guarda todo como una fila en la hoja.
  *
  * INSTALACIÓN: ver INSTALACION.md. Resumen:
  *   Extensiones → Apps Script → pegar este archivo → Implementar →
@@ -45,8 +47,15 @@ var COLS = {
   video10s:    'Videos 10s',
   pieza:       'Pieza / Video',
   estado:      'Estado',
+  // El texto que el referente publicó con su post. Se guarda aparte porque
+  // la columna Caption guarda el que escribe la IA, y "Regenerar" necesita
+  // el original cuando el post no trajo transcripción.
+  captionOriginal: 'Caption original',
   id:          'ID'
 }
+
+// Columnas que el backend agrega solo, al final, si la hoja no las tiene.
+var COLS_AUTOMATICAS = [COLS.captionOriginal, COLS.id]
 
 var HOJA_DEFAULT = 'Referentes'
 var PROPS = PropertiesService.getScriptProperties()
@@ -166,15 +175,16 @@ function crearEncabezados_(h) {
   var enc = [COLS.referente, COLS.views, COLS.likes, COLS.comentarios, COLS.hashtag,
     COLS.numPost, COLS.fecha, COLS.pais, COLS.plataforma, '', COLS.tema,
     COLS.transcripcion, COLS.traduccion, COLS.guion, COLS.caption, COLS.carrusel,
-    COLS.video10s, COLS.pieza, COLS.estado, COLS.id]
+    COLS.video10s, COLS.pieza, COLS.estado, COLS.captionOriginal, COLS.id]
   h.getRange(1, 1, 1, enc.length).setValues([enc]).setFontWeight('bold')
   h.setFrozenRows(1)
 }
 
 /**
- * Mapa nombre-de-columna → índice (base 0). Si falta la columna ID, la agrega
- * al final: es la que permite editar una fila sin equivocarse cuando alguien
- * reordena o borra filas a mano en la hoja.
+ * Mapa nombre-de-columna → índice (base 0). Si faltan las columnas
+ * automáticas (Caption original e ID), las agrega al final. ID es la que
+ * permite editar una fila sin equivocarse cuando alguien reordena o borra
+ * filas a mano en la hoja.
  */
 function mapaCols_(h) {
   var ancho = Math.max(1, h.getLastColumn())
@@ -184,10 +194,12 @@ function mapaCols_(h) {
     var nombre = String(enc[i]).trim()
     if (nombre) map[nombre] = i
   }
-  if (map[COLS.id] === undefined) {
-    h.getRange(1, ancho + 1).setValue(COLS.id).setFontWeight('bold')
-    map[COLS.id] = ancho
-  }
+  COLS_AUTOMATICAS.forEach(function(col) {
+    if (map[col] !== undefined) return
+    h.getRange(1, ancho + 1).setValue(col).setFontWeight('bold')
+    map[col] = ancho
+    ancho++
+  })
   return map
 }
 
@@ -246,7 +258,8 @@ function objetoDeFila_(fila, map, id) {
     carrusel:      String(v(COLS.carrusel) || ''),
     video10s:      String(v(COLS.video10s) || ''),
     pieza:         String(v(COLS.pieza) || ''),
-    estado:        String(v(COLS.estado) || '')
+    estado:        String(v(COLS.estado) || ''),
+    captionOriginal: String(v(COLS.captionOriginal) || '')
   }
 }
 
@@ -287,16 +300,27 @@ function h_analizar(d) {
   var scrape = scrapeApify_(url, plataforma)
   if (!scrape.ok) return scrape
 
+  // Sin subtítulos (Instagram casi siempre): se transcribe el audio del video.
+  var avisoTranscripcion = ''
+  if (!scrape.datos.transcripcion) {
+    var tr = transcribirAudio_(scrape.datos.videoUrl)
+    if (tr.ok) scrape.datos.transcripcion = tr.texto
+    else {
+      avisoTranscripcion = 'Sin transcripción: ' + tr.error
+      console.log(avisoTranscripcion + ' · ' + url)
+    }
+  }
+
   var ia = generarConIA_(scrape.datos)
   if (!ia.ok) {
     // El scraping sí sirvió: guardo la fila igual para no perder el trabajo
     // (y el usuario puede reintentar solo la parte de IA con "Regenerar").
     var guardadaSinIA = escribirFila_(scrape.datos, {}, null)
     return { ok: false, error: 'Se guardaron los datos del referente, pero la IA falló: ' + ia.error,
-             parcial: true, fila: guardadaSinIA }
+             parcial: true, fila: guardadaSinIA, avisoTranscripcion: avisoTranscripcion }
   }
 
-  return { ok: true, fila: escribirFila_(scrape.datos, ia.datos, null) }
+  return { ok: true, fila: escribirFila_(scrape.datos, ia.datos, null), avisoTranscripcion: avisoTranscripcion }
 }
 
 /** Vuelve a correr solo la IA sobre una fila ya scrapeada. */
@@ -309,10 +333,12 @@ function h_regenerar(d) {
   var valores = h.getRange(fila, 1, 1, h.getLastColumn()).getValues()[0]
   var actual = objetoDeFila_(valores, map, d.id)
 
+  // Se parte del caption ORIGINAL del referente. Las filas creadas antes de
+  // que existiera esa columna no lo tienen: ahí se usa el que haya.
   var ia = generarConIA_({
     referente: actual.referente,
     plataforma: actual.plataforma,
-    caption: actual.caption,
+    caption: actual.captionOriginal || actual.caption,
     hashtag: actual.hashtag,
     transcripcion: actual.transcripcion
   })
@@ -336,6 +362,7 @@ function escribirFila_(s, ia, _) {
     referente: s.referente, views: s.views, likes: s.likes, comentarios: s.comentarios,
     hashtag: s.hashtag, numPost: s.numPost, fecha: s.fecha, pais: s.pais,
     plataforma: s.plataforma, transcripcion: s.transcripcion, pieza: s.pieza,
+    captionOriginal: s.caption || '',
     tema: ia.tema || '', traduccion: ia.traduccion || '', guion: ia.guion || '',
     caption: ia.caption || '', carrusel: ia.carrusel || '', video10s: ia.video10s || '',
     estado: 'Pendiente', id: id
@@ -627,7 +654,19 @@ function scrapeApify_(url, plataforma) {
   var item = Array.isArray(arr) ? arr[0] : arr
   if (!item) return { ok: false, error: 'Apify no devolvió datos de ese post. Revisa que el enlace sea público.' }
 
-  return { ok: true, datos: normalizar_(item, plataforma, url) }
+  return { ok: true, datos: normalizar_(item, plataforma, url, token) }
+}
+
+/**
+ * Los archivos que Apify guarda (subtítulos, videos) viven en
+ * api.apify.com. Si la cuenta tiene el acceso a sus datos restringido, la
+ * descarga sin token responde 401/403 y la transcripción queda vacía sin
+ * avisar. Con el token funciona en los dos casos.
+ */
+function conTokenApify_(enlace, token) {
+  var u = String(enlace || '')
+  if (!token || u.indexOf('api.apify.com') < 0 || /[?&]token=/.test(u)) return u
+  return u + (u.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(token)
 }
 
 function inputApify_(url, plataforma) {
@@ -635,7 +674,10 @@ function inputApify_(url, plataforma) {
     return { directUrls: [url], resultsType: 'posts', resultsLimit: 1, addParentData: false }
   }
   if (plataforma === 'tiktok') {
-    return { postURLs: [url], resultsPerPage: 1, shouldDownloadVideos: false,
+    // El video solo se descarga si hay llave de OpenAI: es lo que permite
+    // transcribir el audio cuando TikTok no trae subtítulos.
+    return { postURLs: [url], resultsPerPage: 1,
+             shouldDownloadVideos: !!PROPS.getProperty('OPENAI_KEY'),
              shouldDownloadCovers: false, shouldDownloadSubtitles: true }
   }
   return { startUrls: [{ url: url }], maxResults: 1, downloadSubtitles: true,
@@ -647,8 +689,10 @@ function inputApify_(url, plataforma) {
  * versiones. Por eso se prueban varios nombres posibles para cada dato y se
  * usa el primero que aparezca, en vez de confiar en una sola forma.
  */
-function normalizar_(it, plataforma, url) {
+function normalizar_(it, plataforma, url, token) {
   return {
+    // No va a la hoja: solo se usa para transcribir el audio si hace falta.
+    videoUrl:      conTokenApify_(primero_(it, ['videoUrl', 'mediaUrls.0', 'videoMeta.downloadAddr', 'downloadAddr']), token),
     referente:     primero_(it, ['ownerUsername', 'authorMeta.name', 'authorMeta.nickName', 'channelName', 'ownerFullName', 'author', 'channelUsername']),
     views:         num_(primero_(it, ['videoPlayCount', 'playCount', 'viewCount', 'views', 'videoViewCount'])),
     likes:         num_(primero_(it, ['likesCount', 'diggCount', 'likes', 'likeCount'])),
@@ -658,7 +702,7 @@ function normalizar_(it, plataforma, url) {
     fecha:         fecha_(primero_(it, ['timestamp', 'createTimeISO', 'date', 'uploadDate', 'createTime'])),
     pais:          String(primero_(it, ['locationName', 'country', 'authorMeta.region']) || ''),
     plataforma:    etiquetaPlataforma_(plataforma),
-    transcripcion: transcripcion_(it),
+    transcripcion: transcripcion_(it, token),
     pieza:         String(primero_(it, ['url', 'webVideoUrl', 'postPage']) || url),
     caption:       String(primero_(it, ['caption', 'text', 'description', 'title']) || '')
   }
@@ -712,9 +756,9 @@ function etiquetaPlataforma_(p) {
 /**
  * La transcripción es la parte menos confiable del scraping: YouTube casi
  * siempre trae subtítulos, TikTok a veces, Instagram casi nunca. Cuando no
- * viene, se devuelve vacía y la app avisa para que se pegue a mano.
+ * viene, h_analizar intenta transcribir el audio (transcribirAudio_).
  */
-function transcripcion_(it) {
+function transcripcion_(it, token) {
   // 1) Algunos actores ya la mandan como texto listo.
   var directo = primero_(it, ['transcript', 'text_transcript', 'videoTranscript'])
   if (typeof directo === 'string' && directo.trim()) return limpiarSubs_(directo)
@@ -722,21 +766,24 @@ function transcripcion_(it) {
   // 2) TikTok (clockworks) la deja en videoMeta.subtitleLinks: una lista de
   //    enlaces por idioma que hay que descargar aparte. YouTube usa formas
   //    parecidas. Se recogen todas las listas posibles y se prueba la primera
-  //    que sirva, prefiriendo español y luego inglés.
+  //    que sirva, prefiriendo el audio original y luego español e inglés.
   var listas = [it.videoMeta && it.videoMeta.subtitleLinks, it.subtitleLinks, it.subtitles, it.captions]
   for (var i = 0; i < listas.length; i++) {
-    var texto = deListaSubs_(listas[i])
+    var texto = deListaSubs_(listas[i], token)
     if (texto) return texto
   }
+
+  // 3) Algunos actores de TikTok dejan un enlace aparte con la transcripción.
+  var enlace = primero_(it, ['videoMeta.transcriptionLink', 'transcriptionLink'])
+  if (enlace) return descargarTexto_(enlace, token)
   return ''
 }
 
 /** Saca el texto de una lista de subtítulos, en el idioma más conveniente. */
-function deListaSubs_(lista) {
+function deListaSubs_(lista, token) {
   if (typeof lista === 'string' && lista.trim()) return limpiarSubs_(lista)
   if (!Array.isArray(lista) || !lista.length) return ''
 
-  // Español primero, inglés después, y si no hay ninguno, el que venga.
   var ordenada = lista.slice().sort(function(a, b) {
     return puntajeIdioma_(b) - puntajeIdioma_(a)
   })
@@ -749,25 +796,96 @@ function deListaSubs_(lista) {
     if (s.text) { var t2 = limpiarSubs_(String(s.text)); if (t2) return t2 }
     if (s.srt)  { var t3 = limpiarSubs_(String(s.srt));  if (t3) return t3 }
 
-    var enlace = s.downloadLink || s.url || s.link
-    if (enlace) {
-      try {
-        var r = UrlFetchApp.fetch(String(enlace), { muteHttpExceptions: true })
-        if (r.getResponseCode() < 400) {
-          var t4 = limpiarSubs_(r.getContentText())
-          if (t4) return t4
-        }
-      } catch (err) { /* ese idioma no se pudo bajar: se prueba el siguiente */ }
-    }
+    var enlace = s.downloadLink || s.srtUrl || s.url || s.link
+    var t4 = enlace ? descargarTexto_(enlace, token) : ''
+    if (t4) return t4
   }
   return ''
 }
 
+/** Descarga un archivo de subtítulos y lo deja en texto corrido, o ''. */
+function descargarTexto_(enlace, token) {
+  try {
+    var r = UrlFetchApp.fetch(conTokenApify_(enlace, token), { muteHttpExceptions: true })
+    if (r.getResponseCode() < 400) return limpiarSubs_(r.getContentText())
+    console.log('Subtítulos: la descarga respondió ' + r.getResponseCode())
+  } catch (err) {
+    console.log('Subtítulos: no se pudieron descargar: ' + (err.message || err))
+  }
+  return ''
+}
+
+/**
+ * Orden de preferencia de los subtítulos. TikTok marca el audio original
+ * como source "ASR" y las traducciones automáticas como "MT", y nombra los
+ * idiomas con tres letras ("spa-ES", "eng-US"); YouTube usa dos ("es", "en").
+ * Se prefiere el original, porque la traducción la hace después la IA.
+ */
 function puntajeIdioma_(s) {
-  var lang = String((s && (s.language || s.lang || s.languageCode)) || '').toLowerCase()
-  if (lang.indexOf('es') === 0) return 2
-  if (lang.indexOf('en') === 0) return 1
-  return 0
+  if (!s || typeof s !== 'object') return 0
+  var puntos = String(s.source || '').toUpperCase() === 'ASR' ? 10 : 0
+  var base = String(s.language || s.lang || s.languageCode || '').toLowerCase().split(/[-_]/)[0]
+  if (base === 'es' || base === 'spa') puntos += 2
+  else if (base === 'en' || base === 'eng') puntos += 1
+  return puntos
+}
+
+// ============================================================
+// TRANSCRIPCIÓN DEL AUDIO (OpenAI)
+// ============================================================
+//
+// Instagram no expone subtítulos, así que la única forma de tener su
+// transcripción es escuchar el video. Se usa la API de OpenAI porque la de
+// Claude no recibe audio. Solo corre si hay llave de OpenAI en Ajustes.
+
+var MODELO_TRANSCRIPCION_DEFAULT = 'whisper-1'
+var LIMITE_AUDIO_MB = 25   // tope de OpenAI por archivo
+
+function transcribirAudio_(videoUrl) {
+  var key = PROPS.getProperty('OPENAI_KEY')
+  if (!key) return { ok: false, error: 'el post no trae subtítulos. Pon la llave de OpenAI en Ajustes para transcribir el audio.' }
+  if (!videoUrl) return { ok: false, error: 'Apify no devolvió el archivo del video.' }
+
+  var video
+  try {
+    video = UrlFetchApp.fetch(String(videoUrl), { muteHttpExceptions: true, followRedirects: true })
+  } catch (err) {
+    return { ok: false, error: 'no se pudo descargar el video: ' + (err.message || err) }
+  }
+  if (video.getResponseCode() >= 400) {
+    return { ok: false, error: 'la descarga del video respondió ' + video.getResponseCode() + '.' }
+  }
+
+  var blob = video.getBlob()
+  var mb = blob.getBytes().length / (1024 * 1024)
+  if (mb > LIMITE_AUDIO_MB) {
+    return { ok: false, error: 'el video pesa ' + mb.toFixed(1) + ' MB y OpenAI acepta hasta ' + LIMITE_AUDIO_MB + ' MB.' }
+  }
+  // OpenAI reconoce el formato por la extensión del nombre.
+  blob.setName('video.mp4')
+
+  var res
+  try {
+    res = UrlFetchApp.fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'post',
+      headers: { Authorization: 'Bearer ' + key },
+      payload: {
+        file: blob,
+        model: PROPS.getProperty('TRANSCRIPCION_MODELO') || MODELO_TRANSCRIPCION_DEFAULT
+      },
+      muteHttpExceptions: true
+    })
+  } catch (err) {
+    return { ok: false, error: 'no se pudo conectar con OpenAI: ' + (err.message || err) }
+  }
+  if (res.getResponseCode() >= 400) {
+    return { ok: false, error: 'OpenAI respondió ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 200) }
+  }
+
+  var texto = ''
+  try { texto = String(JSON.parse(res.getContentText()).text || '').trim() } catch (err) { texto = '' }
+  if (!texto) return { ok: false, error: 'el video no tiene voz que transcribir.' }
+  return { ok: true, texto: texto }
 }
 
 /** Quita numeración y marcas de tiempo de un SRT/VTT y deja el texto corrido. */
@@ -889,28 +1007,65 @@ function parsearJson_(txt) {
   return null
 }
 
+// claude-sonnet-4-5 se retira el 30 de noviembre de 2026; este es su sucesor.
+var MODELO_CLAUDE_DEFAULT = 'claude-sonnet-5-5'
+
+// Modelos que aceptan el reintento automático en otro modelo cuando el
+// filtro de seguridad rechaza una petición (parámetro "fallbacks").
+var MODELOS_CON_FALLBACK = ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1']
+
 function llamarClaude_(sistema, entrada, cfg) {
   var key = PROPS.getProperty('ANTHROPIC_KEY')
   if (!key) return { ok: false, error: 'Falta la API key de Claude. Ponla en Ajustes → IA.' }
 
-  var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-    payload: JSON.stringify({
-      model: cfg.modelo || 'claude-sonnet-4-5',
-      max_tokens: 4000,
-      system: sistema,
-      messages: [{ role: 'user', content: entrada }]
-    }),
-    muteHttpExceptions: true
-  })
+  var modelo = cfg.modelo || MODELO_CLAUDE_DEFAULT
+  var headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
+  var cuerpo = {
+    model: modelo,
+    // Los modelos 5.x piensan antes de responder y ese razonamiento cuenta
+    // dentro de max_tokens: con 4000 el JSON podía quedar cortado.
+    max_tokens: 16000,
+    system: sistema,
+    messages: [{ role: 'user', content: entrada }]
+  }
+  // "medium" equilibra calidad y tiempo: Apps Script corta a los 6 minutos y
+  // en ese tiempo también caben Apify y la transcripción.
+  if (/^claude-(opus|sonnet|haiku|fable)-5/.test(modelo)) {
+    cuerpo.output_config = { effort: 'medium' }
+  }
+  if (MODELOS_CON_FALLBACK.indexOf(modelo) >= 0) {
+    headers['anthropic-beta'] = 'server-side-fallback-2026-07-01'
+    cuerpo.fallbacks = 'default'
+  }
+
+  var res
+  try {
+    res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: headers,
+      payload: JSON.stringify(cuerpo),
+      muteHttpExceptions: true
+    })
+  } catch (err) {
+    return { ok: false, error: 'No se pudo conectar con Claude: ' + (err.message || err) }
+  }
 
   if (res.getResponseCode() >= 400) {
     return { ok: false, error: 'Claude respondió ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300) }
   }
   var body = JSON.parse(res.getContentText())
-  var texto = (body.content && body.content[0] && body.content[0].text) || ''
+
+  if (body.stop_reason === 'refusal') {
+    var cat = body.stop_details && body.stop_details.category
+    return { ok: false, error: 'Claude no quiso generar este contenido' + (cat ? ' (' + cat + ')' : '') +
+      '. Revisa el texto del referente o el prompt central.' }
+  }
+
+  // La respuesta puede empezar con bloques de razonamiento ("thinking"):
+  // se toma solo el texto.
+  var texto = (body.content || []).filter(function(b) { return b && b.type === 'text' })
+    .map(function(b) { return b.text || '' }).join('')
   if (!texto) return { ok: false, error: 'Claude devolvió una respuesta vacía.' }
   return { ok: true, contenido: texto }
 }

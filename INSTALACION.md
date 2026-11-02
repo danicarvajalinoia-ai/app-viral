@@ -36,9 +36,10 @@ Notas:
 - El orden **no importa**: el backend busca cada columna por su nombre. Si mueves
   una de lugar o agregas otra, todo sigue funcionando.
 - La columna sin título entre `Plataforma` y `Tema` se respeta y se deja en blanco.
-- La primera vez que la app lea la hoja, **agrega sola una columna `ID`** al final.
-  Es la que permite editar una fila sin equivocarse si alguien reordena o borra
-  filas a mano. No la borres.
+- La primera vez que la app lea la hoja, **agrega solas dos columnas al final**:
+  `Caption original` (el texto que publicó el referente) e `ID` (la que permite
+  editar una fila sin equivocarse si alguien reordena o borra filas a mano).
+  No las borres.
 - Si la hoja está vacía, el backend escribe los encabezados solo.
 
 La app también crea sola, la primera vez que se usan, **dos pestañas más**:
@@ -99,7 +100,10 @@ su backend. En el plan gratuito puedes tener varios sitios sin costo.
 2. Entra a **Ajustes** y pega sus llaves:
    - **Apify** — https://console.apify.com/account/integrations
    - **Claude** — https://console.anthropic.com/settings/keys
-     (o **OpenAI** — https://platform.openai.com/api-keys)
+   - **OpenAI**: https://platform.openai.com/api-keys
+     Es la que transcribe el audio cuando el post no trae subtítulos (casi
+     todo Instagram). Sin ella, esos posts quedan sin transcripción. También
+     sirve como alternativa a Claude para generar los textos.
 3. En **Prompt central** ajusta el tono de su marca, y en **Voz de marca** sube
    guiones o captions suyos que ya funcionaron (`.docx`, `.txt` o `.md`).
 
@@ -131,10 +135,12 @@ Apps Script sirve la última **implementación**, no el último guardado. Ve a
 **Implementar → Administrar implementaciones → ✏️ → Versión: Nueva**.
 
 **"Sin transcripción"**
-YouTube casi siempre trae subtítulos, TikTok a veces, **Instagram casi nunca**.
-Cuando no venga, abre la fila, pega la transcripción a mano y usa **Regenerar**.
-Es la limitación más real del sistema: no depende del código sino de lo que la
-red social expone.
+YouTube casi siempre trae subtítulos, TikTok a veces, **Instagram nunca**.
+Cuando no vienen, el backend descarga el video y transcribe el audio con
+OpenAI, así que revisa que esa llave esté puesta en Ajustes. Si aun así falla
+(video de más de 25 MB, sin voz, o el enlace del video vencido), el motivo
+queda en Apps Script → **Ejecuciones**. En ese caso abre la fila, pega la
+transcripción a mano y usa **Regenerar**.
 
 **Apify responde 401 o 403**
 El token está mal, o la cuenta se quedó sin saldo.
